@@ -1,23 +1,56 @@
 import joblib
-
 import pandas as pd
+
+from pathlib import Path
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 
-# ---------------------------------------------------------
-# Load model
-# ---------------------------------------------------------
+# ============================================================
+# CONFIG
+# ============================================================
 
-model = joblib.load(
-    "C:\\Users\\debos\\Downloads\\Code\\Uniblox-assignment\\Debosmit models\\best_model.joblib"
+# Repository structure:
+#
+# Uniblox-assignment/
+# ├── employee_data.csv
+# ├── Debosmit Submission/
+# │   └── api.py
+# ├── Debosmit models/
+# │   └── best_model.joblib
+# └── Debosmit reports/
+#
+# api.py is inside "Debosmit Submission",
+# so parent.parent points to the repository root.
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MODEL_PATH = (
+    BASE_DIR
+    / "Debosmit models"
+    / "best_model.joblib"
 )
 
 
-# ---------------------------------------------------------
-# FastAPI application
-# ---------------------------------------------------------
+# ============================================================
+# LOAD MODEL
+# ============================================================
+
+if not MODEL_PATH.exists():
+    raise FileNotFoundError(
+        f"Model not found at:\n{MODEL_PATH}\n\n"
+        "Please run train.py first."
+    )
+
+model = joblib.load(
+    MODEL_PATH
+)
+
+
+# ============================================================
+# FASTAPI APPLICATION
+# ============================================================
 
 app = FastAPI(
     title="Employee Insurance Enrollment API",
@@ -29,25 +62,32 @@ app = FastAPI(
 )
 
 
-# ---------------------------------------------------------
-# Request schema
-# ---------------------------------------------------------
+# ============================================================
+# REQUEST SCHEMA
+# ============================================================
 
 class Employee(BaseModel):
 
     age: int
+
     gender: str
+
     marital_status: str
+
     salary: float
+
     employment_type: str
+
     region: str
+
     has_dependents: str
+
     tenure_years: float
 
 
-# ---------------------------------------------------------
-# Health endpoint
-# ---------------------------------------------------------
+# ============================================================
+# HEALTH ENDPOINT
+# ============================================================
 
 @app.get("/")
 def home():
@@ -58,40 +98,58 @@ def home():
     }
 
 
-# ---------------------------------------------------------
-# Prediction endpoint
-# ---------------------------------------------------------
+# ============================================================
+# PREDICTION ENDPOINT
+# ============================================================
 
 @app.post("/predict")
 def predict(employee: Employee):
 
+    # Convert request into DataFrame
+    # with the same feature names used during training.
+
     data = pd.DataFrame(
-        [{
-            "age": employee.age,
-            "gender": employee.gender,
-            "marital_status": employee.marital_status,
-            "salary": employee.salary,
-            "employment_type": employee.employment_type,
-            "region": employee.region,
-            "has_dependents": employee.has_dependents,
-            "tenure_years": employee.tenure_years,
-        }]
+        [
+            {
+                "age": employee.age,
+                "gender": employee.gender,
+                "marital_status": employee.marital_status,
+                "salary": employee.salary,
+                "employment_type": employee.employment_type,
+                "region": employee.region,
+                "has_dependents": employee.has_dependents,
+                "tenure_years": employee.tenure_years,
+            }
+        ]
     )
 
-    prediction = model.predict(data)[0]
+
+    # Make prediction
+
+    prediction = model.predict(
+        data
+    )[0]
+
+
+    # Get probability of enrollment
 
     probability = model.predict_proba(
         data
     )[0][1]
 
+
+    # Return prediction
+
     return {
         "enrollment_probability": round(
             float(probability),
-            4
+            4,
         ),
+
         "predicted_enrollment": int(
             prediction
         ),
+
         "enrolled": (
             "Yes"
             if prediction == 1
