@@ -11,7 +11,7 @@ from pydantic import BaseModel
 # ---------------------------------------------------------
 
 model = joblib.load(
-    "C:\\Users\\debos\\Downloads\\Code\\Uniblox-assignment\\models\\best_model.joblib"
+    "C:\\Users\\debos\\Downloads\\Code\\Uniblox-assignment\\Debosmit models\\best_model.joblib"
 )
 
 

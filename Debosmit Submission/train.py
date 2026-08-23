@@ -2,6 +2,7 @@ import json
 import time
 from pathlib import Path
 
+import joblib
 import pandas as pd
 
 from sklearn.model_selection import (
@@ -28,45 +29,81 @@ from sklearn.metrics import (
 # CONFIG
 # ============================================================
 
-DATA_PATH = r"C:\Users\debos\Downloads\Code\Uniblox-assignment\employee_data.csv"
 
-MODEL_DIR = Path("models")
-REPORT_DIR = Path("reports")
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-MODEL_DIR.mkdir(exist_ok=True)
-REPORT_DIR.mkdir(exist_ok=True)
+# Dataset
+DATA_FILE = BASE_DIR / "employee_data.csv"
 
+# Model directory
+MODEL_DIR = BASE_DIR / "Debosmit models"
+
+# Reports directory
+REPORT_DIR = BASE_DIR / "Debosmit reports"
+
+# Saved model
 MODEL_PATH = MODEL_DIR / "best_model.joblib"
+
+# Create directories if they don't exist
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
 # 1. LOAD DATA
 # ============================================================
 
-print("Loading dataset...")
+print("=" * 60)
+print("EMPLOYEE INSURANCE ENROLLMENT PREDICTION")
+print("=" * 60)
 
-df = pd.read_csv(DATA_PATH)
+print("\nLoading dataset...")
 
-print("Dataset shape:", df.shape)
+if not DATA_FILE.exists():
+    raise FileNotFoundError(
+        f"Dataset not found at:\n{DATA_FILE}"
+    )
+
+df = pd.read_csv(DATA_FILE)
+
+print(f"Dataset loaded successfully.")
+print(f"Dataset shape: {df.shape}")
 
 
 # ============================================================
 # 2. DATA CHECKS
 # ============================================================
 
+print("\n" + "=" * 60)
+print("DATA CHECKS")
+print("=" * 60)
+
 print("\nMissing values:")
-print(df.isnull().sum())
+
+missing_values = df.isnull().sum()
+
+print(missing_values)
+
 
 print("\nTarget distribution:")
-print(df["enrolled"].value_counts())
+
+target_distribution = df["enrolled"].value_counts()
+
+print(target_distribution)
 
 
 # ============================================================
 # 3. FEATURES / TARGET
 # ============================================================
 
+# employee_id is an identifier and should not be used
+# as a predictive feature.
+
 X = df.drop(
-    columns=["enrolled", "employee_id"]
+    columns=[
+        "enrolled",
+        "employee_id",
+    ]
 )
 
 y = df["enrolled"]
@@ -84,6 +121,11 @@ categorical_columns = X.select_dtypes(
     include=["object"]
 ).columns.tolist()
 
+
+print("\n" + "=" * 60)
+print("FEATURES")
+print("=" * 60)
+
 print("\nNumerical columns:")
 print(numerical_columns)
 
@@ -95,42 +137,58 @@ print(categorical_columns)
 # 5. PREPROCESSING
 # ============================================================
 
+# Numerical preprocessing:
+# Missing numerical values are replaced with the median.
+
 numeric_pipeline = Pipeline(
     steps=[
         (
             "imputer",
-            SimpleImputer(strategy="median")
+            SimpleImputer(
+                strategy="median"
+            ),
         )
     ]
 )
+
+
+# Categorical preprocessing:
+# 1. Missing values are replaced with the most frequent value.
+# 2. Categorical values are converted to numerical features
+#    using one-hot encoding.
 
 categorical_pipeline = Pipeline(
     steps=[
         (
             "imputer",
-            SimpleImputer(strategy="most_frequent")
+            SimpleImputer(
+                strategy="most_frequent"
+            ),
         ),
         (
             "encoder",
             OneHotEncoder(
                 handle_unknown="ignore",
-                sparse_output=False
-            )
+                sparse_output=False,
+            ),
         ),
     ]
 )
+
+
+# Combine numerical and categorical preprocessing.
 
 preprocessor = ColumnTransformer(
     transformers=[
         (
             "numeric",
             numeric_pipeline,
-            numerical_columns
+            numerical_columns,
         ),
         (
             "categorical",
             categorical_pipeline,
-            categorical_columns
+            categorical_columns,
         ),
     ]
 )
@@ -148,12 +206,17 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y,
 )
 
-print("\nTraining samples:", len(X_train))
-print("Testing samples:", len(X_test))
+
+print("\n" + "=" * 60)
+print("TRAIN / TEST SPLIT")
+print("=" * 60)
+
+print(f"\nTraining samples: {len(X_train)}")
+print(f"Testing samples : {len(X_test)}")
 
 
 # ============================================================
-# 7. BASE MODEL
+# 7. BASE RANDOM FOREST MODEL
 # ============================================================
 
 model = RandomForestClassifier(
@@ -163,10 +226,19 @@ model = RandomForestClassifier(
     n_jobs=-1,
 )
 
+
+# Combine preprocessing and model into one pipeline.
+
 pipeline = Pipeline(
     steps=[
-        ("preprocessing", preprocessor),
-        ("model", model),
+        (
+            "preprocessing",
+            preprocessor,
+        ),
+        (
+            "model",
+            model,
+        ),
     ]
 )
 
@@ -175,19 +247,21 @@ pipeline = Pipeline(
 # 8. TRAIN BASE MODEL
 # ============================================================
 
-print("\nTraining base Random Forest...")
+print("\n" + "=" * 60)
+print("TRAINING BASE RANDOM FOREST")
+print("=" * 60)
 
 start_time = time.time()
 
 pipeline.fit(
     X_train,
-    y_train
+    y_train,
 )
 
 training_time = time.time() - start_time
 
 print(
-    f"Training completed in "
+    f"\nTraining completed in "
     f"{training_time:.2f} seconds"
 )
 
@@ -196,78 +270,94 @@ print(
 # 9. BASE MODEL EVALUATION
 # ============================================================
 
-y_pred = pipeline.predict(X_test)
-y_prob = pipeline.predict_proba(X_test)[:, 1]
+y_pred_base = pipeline.predict(X_test)
+
+y_prob_base = pipeline.predict_proba(
+    X_test
+)[:, 1]
+
 
 base_metrics = {
-    "accuracy": accuracy_score(y_test, y_pred),
+    "accuracy": accuracy_score(
+        y_test,
+        y_pred_base,
+    ),
     "precision": precision_score(
         y_test,
-        y_pred,
-        zero_division=0
+        y_pred_base,
+        zero_division=0,
     ),
     "recall": recall_score(
         y_test,
-        y_pred,
-        zero_division=0
+        y_pred_base,
+        zero_division=0,
     ),
     "f1": f1_score(
         y_test,
-        y_pred,
-        zero_division=0
+        y_pred_base,
+        zero_division=0,
     ),
     "roc_auc": roc_auc_score(
         y_test,
-        y_prob
+        y_prob_base,
     ),
 }
 
-print("\n" + "=" * 50)
-print("BASE MODEL")
-print("=" * 50)
+
+print("\n" + "=" * 60)
+print("BASE MODEL EVALUATION")
+print("=" * 60)
 
 for metric, value in base_metrics.items():
-    print(f"{metric.upper():10}: {value:.4f}")
+    print(
+        f"{metric.upper():10}: "
+        f"{value:.4f}"
+    )
 
 
 # ============================================================
 # 10. HYPERPARAMETER TUNING
 # ============================================================
 
+print("\n" + "=" * 60)
+print("HYPERPARAMETER TUNING")
+print("=" * 60)
+
 print("\nStarting hyperparameter tuning...")
+
 
 param_grid = {
     "model__n_estimators": [
         100,
         200,
         300,
-        500
+        500,
     ],
     "model__max_depth": [
         None,
         5,
         10,
-        20
+        20,
     ],
     "model__min_samples_split": [
         2,
         5,
-        10
+        10,
     ],
     "model__min_samples_leaf": [
         1,
         2,
-        4
+        4,
     ],
     "model__max_features": [
         "sqrt",
-        "log2"
+        "log2",
     ],
 }
 
 
 search = RandomizedSearchCV(
-    pipeline,
+    estimator=pipeline,
     param_distributions=param_grid,
     n_iter=10,
     scoring="roc_auc",
@@ -277,22 +367,30 @@ search = RandomizedSearchCV(
     verbose=1,
 )
 
+
 start_time = time.time()
 
 search.fit(
     X_train,
-    y_train
+    y_train,
 )
 
 tuning_time = time.time() - start_time
+
 
 print(
     f"\nHyperparameter tuning completed in "
     f"{tuning_time:.2f} seconds"
 )
 
+
 print("\nBest parameters:")
-print(search.best_params_)
+
+for parameter, value in search.best_params_.items():
+    print(
+        f"{parameter}: {value}"
+    )
+
 
 print(
     f"\nBest CV ROC-AUC: "
@@ -306,89 +404,110 @@ print(
 
 best_model = search.best_estimator_
 
+
+# ============================================================
+# 12. FINAL MODEL EVALUATION
+# ============================================================
+
 y_pred = best_model.predict(X_test)
-y_prob = best_model.predict_proba(X_test)[:, 1]
 
+y_prob = best_model.predict_proba(
+    X_test
+)[:, 1]
 
-# ============================================================
-# 12. FINAL METRICS
-# ============================================================
 
 metrics = {
-    "accuracy": accuracy_score(y_test, y_pred),
+    "accuracy": accuracy_score(
+        y_test,
+        y_pred,
+    ),
     "precision": precision_score(
         y_test,
         y_pred,
-        zero_division=0
+        zero_division=0,
     ),
     "recall": recall_score(
         y_test,
         y_pred,
-        zero_division=0
+        zero_division=0,
     ),
     "f1": f1_score(
         y_test,
         y_pred,
-        zero_division=0
+        zero_division=0,
     ),
     "roc_auc": roc_auc_score(
         y_test,
-        y_prob
+        y_prob,
     ),
 }
+
+
+# ============================================================
+# 13. PRINT FINAL RESULTS
+# ============================================================
 
 print("\n" + "=" * 60)
 print("FINAL MODEL EVALUATION")
 print("=" * 60)
 
 for metric, value in metrics.items():
-    print(f"{metric.upper():10}: {value:.4f}")
+    print(
+        f"{metric.upper():10}: "
+        f"{value:.4f}"
+    )
 
 
 print("\nClassification Report:")
+
 print(
     classification_report(
         y_test,
         y_pred,
-        zero_division=0
+        zero_division=0,
     )
 )
+
 
 print("Confusion Matrix:")
-print(
-    confusion_matrix(
-        y_test,
-        y_pred
-    )
+
+cm = confusion_matrix(
+    y_test,
+    y_pred,
 )
 
+print(cm)
+
 
 # ============================================================
-# 13. SAVE MODEL
+# 14. SAVE BEST MODEL
 # ============================================================
 
-import joblib
+print("\n" + "=" * 60)
+print("SAVING MODEL")
+print("=" * 60)
 
 joblib.dump(
     best_model,
-    MODEL_PATH
+    MODEL_PATH,
 )
 
 print(
-    f"\nModel saved to: {MODEL_PATH}"
+    f"\nModel saved to:\n"
+    f"{MODEL_PATH}"
 )
 
 
 # ============================================================
-# 14. SAVE METRICS
+# 15. SAVE METRICS
 # ============================================================
 
 results = {
     "dataset": {
-        "rows": len(df),
-        "columns": len(df.columns),
-        "training_samples": len(X_train),
-        "testing_samples": len(X_test),
+        "rows": int(len(df)),
+        "columns": int(len(df.columns)),
+        "training_samples": int(len(X_train)),
+        "testing_samples": int(len(X_test)),
     },
 
     "features": {
@@ -399,68 +518,142 @@ results = {
     "base_model": {
         "model": "RandomForestClassifier",
         "metrics": base_metrics,
-        "training_time_seconds": training_time,
+        "training_time_seconds": round(
+            training_time,
+            4,
+        ),
     },
 
     "tuned_model": {
         "model": "RandomForestClassifier",
         "metrics": metrics,
         "best_parameters": search.best_params_,
-        "best_cv_roc_auc": search.best_score_,
-        "tuning_time_seconds": tuning_time,
+        "best_cv_roc_auc": float(
+            search.best_score_
+        ),
+        "tuning_time_seconds": round(
+            tuning_time,
+            4,
+        ),
     },
+
+    "confusion_matrix": cm.tolist(),
+
+    "classification_report": classification_report(
+        y_test,
+        y_pred,
+        output_dict=True,
+        zero_division=0,
+    ),
 }
 
 
+metrics_path = REPORT_DIR / "metrics.json"
+
 with open(
-    REPORT_DIR / "metrics.json",
-    "w"
+    metrics_path,
+    "w",
+    encoding="utf-8",
 ) as f:
+
     json.dump(
         results,
         f,
-        indent=4
+        indent=4,
     )
 
+
 print(
-    f"Metrics saved to: "
-    f"{REPORT_DIR / 'metrics.json'}"
+    f"Metrics saved to:\n"
+    f"{metrics_path}"
 )
 
 
 # ============================================================
-# 15. SAVE EXPERIMENT LOG
+# 16. SAVE EXPERIMENT LOG
 # ============================================================
 
-experiment = pd.DataFrame([
-    {
-        "experiment": "Random Forest - Base",
-        "accuracy": base_metrics["accuracy"],
-        "precision": base_metrics["precision"],
-        "recall": base_metrics["recall"],
-        "f1": base_metrics["f1"],
-        "roc_auc": base_metrics["roc_auc"],
-        "training_time_seconds": training_time,
-    },
-    {
-        "experiment": "Random Forest - Tuned",
-        "accuracy": metrics["accuracy"],
-        "precision": metrics["precision"],
-        "recall": metrics["recall"],
-        "f1": metrics["f1"],
-        "roc_auc": metrics["roc_auc"],
-        "training_time_seconds": tuning_time,
-    }
-])
+experiment = pd.DataFrame(
+    [
+        {
+            "experiment": "Random Forest - Base",
+            "accuracy": base_metrics["accuracy"],
+            "precision": base_metrics["precision"],
+            "recall": base_metrics["recall"],
+            "f1": base_metrics["f1"],
+            "roc_auc": base_metrics["roc_auc"],
+            "training_time_seconds": training_time,
+        },
+        {
+            "experiment": "Random Forest - Tuned",
+            "accuracy": metrics["accuracy"],
+            "precision": metrics["precision"],
+            "recall": metrics["recall"],
+            "f1": metrics["f1"],
+            "roc_auc": metrics["roc_auc"],
+            "training_time_seconds": tuning_time,
+        },
+    ]
+)
+
+
+experiments_path = REPORT_DIR / "experiments.csv"
 
 experiment.to_csv(
-    REPORT_DIR / "experiments.csv",
-    index=False
+    experiments_path,
+    index=False,
+)
+
+
+print(
+    f"Experiment log saved to:\n"
+    f"{experiments_path}"
+)
+
+
+# ============================================================
+# 17. FINAL SUMMARY
+# ============================================================
+
+print("\n" + "=" * 60)
+print("TRAINING COMPLETED SUCCESSFULLY")
+print("=" * 60)
+
+print(
+    f"\nBest model: RandomForestClassifier"
 )
 
 print(
-    f"Experiment log saved to: "
-    f"{REPORT_DIR / 'experiments.csv'}"
+    f"Test Accuracy : {metrics['accuracy']:.4f}"
 )
 
-print("\nTraining completed successfully.")
+print(
+    f"Test Precision: {metrics['precision']:.4f}"
+)
+
+print(
+    f"Test Recall   : {metrics['recall']:.4f}"
+)
+
+print(
+    f"Test F1       : {metrics['f1']:.4f}"
+)
+
+print(
+    f"Test ROC-AUC  : {metrics['roc_auc']:.4f}"
+)
+
+print(
+    f"\nModel:"
+    f"\n{MODEL_PATH}"
+)
+
+print(
+    f"\nMetrics:"
+    f"\n{metrics_path}"
+)
+
+print(
+    f"\nExperiments:"
+    f"\n{experiments_path}"
+)

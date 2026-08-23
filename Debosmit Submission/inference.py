@@ -4,8 +4,8 @@ from pathlib import Path
 from datetime import datetime
 
 
-MODEL_PATH = Path("models/best_model.joblib")
-LOG_PATH = Path("reports/predictions.csv")
+MODEL_PATH = Path("Debosmit models/best_model.joblib")
+LOG_PATH = Path("Debosmit reports/predictions.csv")
 
 
 # ---------------------------------------------------------
