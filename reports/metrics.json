@@ -1,0 +1,52 @@
+{
+    "dataset": {
+        "rows": 10000,
+        "columns": 10,
+        "training_samples": 8000,
+        "testing_samples": 2000
+    },
+    "features": {
+        "numerical": [
+            "age",
+            "salary",
+            "tenure_years"
+        ],
+        "categorical": [
+            "gender",
+            "marital_status",
+            "employment_type",
+            "region",
+            "has_dependents"
+        ]
+    },
+    "base_model": {
+        "model": "RandomForestClassifier",
+        "metrics": {
+            "accuracy": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 1.0
+        },
+        "training_time_seconds": 0.8963615894317627
+    },
+    "tuned_model": {
+        "model": "RandomForestClassifier",
+        "metrics": {
+            "accuracy": 1.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 1.0
+        },
+        "best_parameters": {
+            "model__n_estimators": 200,
+            "model__min_samples_split": 10,
+            "model__min_samples_leaf": 1,
+            "model__max_features": "log2",
+            "model__max_depth": null
+        },
+        "best_cv_roc_auc": 1.0,
+        "tuning_time_seconds": 11.502020597457886
+    }
+}
