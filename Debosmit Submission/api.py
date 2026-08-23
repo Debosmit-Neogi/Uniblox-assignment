@@ -11,18 +11,6 @@ from pydantic import BaseModel
 # CONFIG
 # ============================================================
 
-# Repository structure:
-#
-# Uniblox-assignment/
-# ├── employee_data.csv
-# ├── Debosmit Submission/
-# │   └── api.py
-# ├── Debosmit models/
-# │   └── best_model.joblib
-# └── Debosmit reports/
-#
-# api.py is inside "Debosmit Submission",
-# so parent.parent points to the repository root.
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
